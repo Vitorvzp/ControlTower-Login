@@ -1,6 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { z } from "zod";
-import { Loader2, Mail, Lock, CheckCircle2, AlertCircle, Eye, EyeOff, KeyRound, ArrowLeft } from "lucide-react";
+import { Loader2, Mail, Lock, CheckCircle2, AlertCircle, Eye, EyeOff, KeyRound, ArrowLeft, RefreshCw, Clock } from "lucide-react";
 
 const loginSchema = z.object({
   email: z.string().trim().email({ message: "Digite um email válido" }).max(255),
@@ -12,6 +12,8 @@ type LoginState = "idle" | "loading" | "success" | "error";
 
 const LOGIN_API = "https://n8n.srv1251718.hstgr.cloud/webhook/login";
 const V2F_API = "https://n8n.srv1251718.hstgr.cloud/webhook/v2f";
+
+const TIMER_DURATION = 7 * 60; // 7 minutos em segundos
 
 const LoginForm = () => {
   const [email, setEmail] = useState("");
@@ -25,6 +27,11 @@ const LoginForm = () => {
   // Código de verificação (6 dígitos)
   const [code, setCode] = useState(["", "", "", "", "", ""]);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  
+  // Timer state
+  const [timeLeft, setTimeLeft] = useState(TIMER_DURATION);
+  const [isResending, setIsResending] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const validateForm = (): boolean => {
     const result = loginSchema.safeParse({ email, senha });
@@ -41,6 +48,47 @@ const LoginForm = () => {
     
     setErrors({});
     return true;
+  };
+
+  // Limpa o timer ao desmontar ou mudar de step
+  const clearTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  // Inicia o timer de 7 minutos
+  const startTimer = useCallback(() => {
+    clearTimer();
+    setTimeLeft(TIMER_DURATION);
+    
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearTimer();
+          // Código expirou, volta para login
+          setStep("credentials");
+          setState("error");
+          setMessage("Código expirado. Faça login novamente.");
+          setCode(["", "", "", "", "", ""]);
+          return TIMER_DURATION;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [clearTimer]);
+
+  // Cleanup do timer
+  useEffect(() => {
+    return () => clearTimer();
+  }, [clearTimer]);
+
+  // Formata o tempo restante (mm:ss)
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
   const handleCredentialsSubmit = async (e: React.FormEvent) => {
@@ -67,6 +115,7 @@ const LoginForm = () => {
         setStep("verification");
         setState("idle");
         setMessage("Código enviado para seu email!");
+        startTimer();
         // Foca no primeiro input do código
         setTimeout(() => inputRefs.current[0]?.focus(), 100);
       } else {
@@ -76,6 +125,40 @@ const LoginForm = () => {
     } catch {
       setState("error");
       setMessage("Erro de conexão. Tente novamente.");
+    }
+  };
+
+  // Reenviar código
+  const handleResendCode = async () => {
+    setIsResending(true);
+    setMessage("");
+    setCode(["", "", "", "", "", ""]);
+
+    try {
+      const response = await fetch(LOGIN_API, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: email.trim(), senha: senha.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        startTimer();
+        setState("idle");
+        setMessage("Novo código enviado!");
+        setTimeout(() => inputRefs.current[0]?.focus(), 100);
+      } else {
+        setState("error");
+        setMessage(data.output || "Erro ao reenviar código");
+      }
+    } catch {
+      setState("error");
+      setMessage("Erro de conexão. Tente novamente.");
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -168,6 +251,7 @@ const LoginForm = () => {
   };
 
   const handleBackToCredentials = () => {
+    clearTimer();
     setStep("credentials");
     setState("idle");
     setMessage("");
@@ -175,6 +259,7 @@ const LoginForm = () => {
   };
 
   const resetForm = () => {
+    clearTimer();
     setStep("credentials");
     setState("idle");
     setMessage("");
@@ -326,6 +411,14 @@ const LoginForm = () => {
           </form>
         ) : (
           <div className="space-y-6">
+            {/* Timer */}
+            <div className="animate-fade-in flex items-center justify-center gap-2">
+              <Clock className={`h-5 w-5 ${timeLeft <= 60 ? "text-destructive" : "text-muted-foreground"}`} />
+              <span className={`text-lg font-mono font-semibold ${timeLeft <= 60 ? "text-destructive" : "text-foreground"}`}>
+                {formatTime(timeLeft)}
+              </span>
+            </div>
+
             {/* Success message for code sent */}
             {message && state === "idle" && (
               <div className="animate-fade-in rounded-2xl bg-primary/10 p-4 text-center">
@@ -350,7 +443,7 @@ const LoginForm = () => {
                   onKeyDown={(e) => handleKeyDown(index, e)}
                   onPaste={index === 0 ? handlePaste : undefined}
                   className="glass-input h-14 w-11 p-0 text-center text-xl font-bold sm:h-16 sm:w-12 sm:text-2xl"
-                  disabled={state === "loading"}
+                  disabled={state === "loading" || isResending}
                 />
               ))}
             </div>
@@ -370,7 +463,7 @@ const LoginForm = () => {
               <button
                 type="button"
                 onClick={() => handleVerificationSubmit()}
-                disabled={state === "loading" || code.join("").length !== 6}
+                disabled={state === "loading" || isResending || code.join("").length !== 6}
                 className="btn-primary-ios w-full disabled:opacity-50"
               >
                 {state === "loading" ? (
@@ -384,13 +477,29 @@ const LoginForm = () => {
               </button>
             </div>
 
-            {/* Back Button */}
-            <div className="animate-slide-up text-center" style={{ animationDelay: "0.3s" }}>
+            {/* Resend Code + Back Button */}
+            <div className="animate-slide-up flex items-center justify-center gap-4" style={{ animationDelay: "0.3s" }}>
+              <button
+                type="button"
+                onClick={handleResendCode}
+                className="inline-flex items-center gap-1 text-sm font-medium text-primary transition-colors hover:text-primary/80 disabled:opacity-50"
+                disabled={state === "loading" || isResending}
+              >
+                {isResending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                Reenviar código
+              </button>
+              
+              <span className="text-muted-foreground/50">|</span>
+              
               <button
                 type="button"
                 onClick={handleBackToCredentials}
                 className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-                disabled={state === "loading"}
+                disabled={state === "loading" || isResending}
               >
                 <ArrowLeft className="h-4 w-4" />
                 Voltar
