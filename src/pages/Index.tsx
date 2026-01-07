@@ -1,13 +1,18 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import LoginForm from "@/components/LoginForm";
 
 const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <main className="gradient-bg relative min-h-screen overflow-hidden">
+      {/* Floating Orbs Background */}
+      <div className="floating-orb floating-orb-1" aria-hidden="true" />
+      <div className="floating-orb floating-orb-2" aria-hidden="true" />
+      <div className="floating-orb floating-orb-3" aria-hidden="true" />
+
+      {/* Content */}
+      <div className="relative z-10 flex min-h-screen items-center justify-center py-12">
+        <LoginForm />
       </div>
-    </div>
+    </main>
   );
 };
 
