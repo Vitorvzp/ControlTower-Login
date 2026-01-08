@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const isAuthenticated = !!user && !!token;
-  const isAdmin = user?.tipo === 1;
+  const isAdmin = user?.tipo === 0; // role 0 = admin no JWT
 
   return (
     <AuthContext.Provider

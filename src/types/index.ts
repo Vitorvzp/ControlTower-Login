@@ -3,9 +3,10 @@ export interface User {
   id: number;
   nome?: string;
   email: string;
-  tipo: number; // 1 = admin, 2 = user, etc.
+  tipo: number; // 0 = admin, 1+ = user, etc.
   empresaId?: number;
   transportadoraId?: string;
+  imagemUrl?: string;
 }
 
 export interface AuthSession {

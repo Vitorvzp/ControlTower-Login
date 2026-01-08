@@ -2,7 +2,6 @@ import type { Embarcadora, Transportadora, User, CreateUserForm } from "@/types"
 
 const BASE_URL = "https://n8n.srv1251718.hstgr.cloud/webhook";
 
-// Auth APIs
 export const API_ENDPOINTS = {
   login: `${BASE_URL}/login`,
   verify2FA: `${BASE_URL}/v2f`,
@@ -11,6 +10,31 @@ export const API_ENDPOINTS = {
   usuarios: `${BASE_URL}/usuarios`,
   transportadoras: `${BASE_URL}/transportadoras`,
 } as const;
+
+// Decodifica JWT para extrair dados do usuário
+function decodeJWT(token: string): User | null {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const payload = JSON.parse(jsonPayload);
+    
+    return {
+      id: payload.id,
+      email: payload.email,
+      nome: payload.nome,
+      tipo: payload.role,
+      imagemUrl: payload.imagemUrl,
+    };
+  } catch {
+    return null;
+  }
+}
 
 // Helper para fazer requests autenticadas
 const authFetch = async <T>(
@@ -63,11 +87,12 @@ export const verify2FA = async (
 
   const data = await response.json();
   
-  if (response.ok) {
+  if (response.ok && data.jwttoken) {
+    const user = decodeJWT(data.jwttoken);
     return {
       success: true,
-      token: data.token,
-      user: data.user,
+      token: data.jwttoken,
+      user: user || undefined,
       output: data.output,
     };
   }
