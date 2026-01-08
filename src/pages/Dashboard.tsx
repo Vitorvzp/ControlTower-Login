@@ -237,11 +237,11 @@ const Dashboard = () => {
                             <TableCell>{item.email}</TableCell>
                             <TableCell>
                               <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                item.tipo === 1 
+                                item.tipo === 0 
                                   ? "bg-primary/10 text-primary" 
                                   : "bg-secondary text-secondary-foreground"
                               }`}>
-                                {item.tipo === 1 ? "Admin" : "Usuário"}
+                                {item.tipo === 0 ? "Admin" : "Usuário"}
                               </span>
                             </TableCell>
                           </TableRow>
